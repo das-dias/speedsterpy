@@ -20,9 +20,9 @@ class SpeedsterPortType(Enum):
         IO: input and output point
     """
     None
-    INPUT = 1
-    OUTPUT = 2
-    INOUT = 3
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
 
 
 class SpeedsterPort(object):
@@ -30,7 +30,7 @@ class SpeedsterPort(object):
         "name",
         "ioType",
         "layer",
-        "datatype",
+        "purpose",
         "resistance",
         "location",
         "width",
@@ -40,20 +40,18 @@ class SpeedsterPort(object):
         name: str = "new_port",
         ioType: SpeedsterPortType = None,
         resistance: float = 0.0,
-        location: list = [0,0],
+        location: list = (0,0),
         width: float = 1.0,
         layer: str = "met1",
-        dataType: str = "pin",
+        purpose: str = "probe",
     ):
         self.name = name
         self.ioType = ioType
         self.layer = layer
-        self.datatype = dataType
+        self.purpose = purpose
         self.resistance = resistance
         self.location = location
         self.width = width
-        self.x = location[0]
-        self.y = location[1]
         
     def __str__(self):
         return "Port: {} Type: {} Location: {} in {} Resistance: {}".format(
@@ -71,7 +69,7 @@ class SpeedsterPort(object):
             "location": self.location,
             "width": self.width,
             "layer": self.layer,
-            "datatype": self.datatype,
+            "purpose": self.purpose,
         }
     def parseData(self, yamlDict: dict):
         """_summary_
@@ -98,19 +96,18 @@ class SpeedsterPort(object):
         if not "layer" in yamlDict.keys():
             raise KeyError("Port must have a layer")
         self.layer = yamlDict['layer']
-        if not "datatype" in yamlDict.keys():
-            raise KeyError("Port must have a datatype")
-        self.datatype = yamlDict['datatype']
-        self.x = self.location[0]
-        self.y = self.location[1]
+        if not "purpose" in yamlDict.keys():
+            raise KeyError("Port must have a purpose")
+        self.purpose = yamlDict['purpose']
     
     def get_polygon(self):
-        #
+        x = self.location[0]
+        y = self.location[1]
         return [
-            [self.x - self.width/2, self.y - self.width/2],
-            [self.x + self.width/2, self.y - self.width/2],
-            [self.x - self.width/2, self.y + self.width/2],
-            [self.x + self.width/2, self.y + self.width/2],
+            (x - self.width/2, y - self.width/2),
+            (x + self.width/2, y - self.width/2),
+            (x + self.width/2, y + self.width/2),
+            (x - self.width/2, y + self.width/2),
         ]
         
 class SpeedsterPortLibrary(object):

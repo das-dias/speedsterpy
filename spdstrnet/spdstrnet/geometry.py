@@ -11,6 +11,7 @@ from loguru import logger
 import itertools
 from enum import Enum
 import warnings
+from operator import contains
 import numpy as np
 from gdstk import(
     Library,
@@ -18,17 +19,22 @@ from gdstk import(
     Polygon,
     rectangle,
     RobustPath,
+    Reference,
     # functions
     boolean, # perform boolean operations on two polygon sets
-    inside
+    inside,
+    slice
 )
 from .data import(
     SpeedsterPort,
+    SpeedsterPortType,
 )
 from spdstrutil import (
     GdsTable,
     GdsLayerPurpose,
+    timer,
 )
+from copy import copy, deepcopy
 
 
 class PolygonDirection(Enum):
@@ -48,14 +54,14 @@ class PolygonDirection(Enum):
     """
     
     None
-    NORTH       = 1#"+y"
-    NORTH_EAST  = 2
-    EAST        = 3#"+x"
-    SOUTH_EAST  = 4 
-    SOUTH       = 5#"-y"
-    SOUTH_WEST  = 6
-    WEST        = 7#"-x"
-    NORTH_WEST  = 8
+    NORTH       = (0,1)#"+y"
+    NORTH_EAST  = (1,1)
+    EAST        = (1,0)#"+x"
+    SOUTH_EAST  = (1,-1) 
+    SOUTH       = (0,-1)#"-y"
+    SOUTH_WEST  = (-1,-1)
+    WEST        = (-1,0)#"-x"
+    NORTH_WEST  = (-1,1)
 
 def check_point_inside_polygon(
     polygon,
@@ -146,13 +152,19 @@ def get_common_edges(
                     return None
         # if it is, check if either the final or the sstarting point of e2 is in the bounding box defined by the vertices of e1
         bbox = rectangle( e1[0], e1[1] )
+        bbox2 = rectangle( e2[0], e2[1] )
         if not( inside([e2[0]], bbox)[0] or inside([e2[1]], bbox)[0] ):
-            return None
+            if not ( inside([e1[0]], bbox2)[0] or inside([e1[1]], bbox2)[0] ):
+                return None
         # finally, there is actually an intersection, and we must return it
         # check e2 fully contained in e1
         if inside([e2[0]], bbox)[0] and inside([e2[1]], bbox)[0]:
             return e2
+        # check e1 fully contained in e2
+        if inside([e1[0]], bbox2)[0] and inside([e1[1]], bbox2)[0]:
+            return e1
         # check for partial intersection
+        # todo : Not perfect! Polygons sharing a single vertix are still considered as cheighbours
         if inside([e2[0]], bbox)[0]:
             return (e2[0], e1[1])
         
@@ -223,7 +235,6 @@ def check_neighbour_polygons(
             return True if not bool_polygon_overlap_check(polyA,polyB) else False
     return False
 
-
 def check_same_polygon(
     polyA,
     polyB,
@@ -286,7 +297,7 @@ def check_polygon_contains_polygon(
     return (False not in boolMap) or check_same_polygon(polyA, polyB)
     
 def find_centroid(
-    poly: np.array,
+    poly,
 ) -> list:
     """_summary_
     Finds the centroid of a single polygon
@@ -296,13 +307,14 @@ def find_centroid(
         list: [x:float, y: float] 2 items list
     """
     cent = [0,0]
-    nPoly = len(poly)
     signedArea = 0.0
+    points = poly.points
+    nPoly = len(points)
     # for all the vertices of the polygon
-    for k, point in enumerate(nPoly):
+    for k, point in enumerate(points):
         x0 = point[0]
         y0 = point[1]
-        opposite_point = poly[(k+1) % nPoly]
+        opposite_point = points[(k+1) % nPoly]
         x1 = opposite_point[0]
         y1 = opposite_point[1]
         # compute the value of the area composed of the two vertices
@@ -316,10 +328,10 @@ def find_centroid(
     signedArea *= 0.5
     cent[0] = cent[0]/ (6.0*signedArea)
     cent[1] = cent[1]/ (6.0*signedArea)
-    return cent
+    return tuple(cent)
 
 
-def unit_vec(
+def unit_vector(
     pointA: list,
     pointB: list,
 ) -> list:
@@ -330,8 +342,8 @@ def unit_vec(
     Returns:
         list: [x:float, y: float] 2 items list
     """
-    vec: list = [pointB[0] - pointA[0], pointB[1] - pointA[1]]
-    return [ vec[0]/np.linalg.norm(vec), vec[1]/np.linalg.norm(vec) ]
+    vec = np.array([pointB[0] - pointA[0], pointB[1] - pointA[1]])
+    return [ vec[0]/np.sqrt(vec.dot(vec)), vec[1]/np.sqrt(vec.dot(vec)) ]
 
 
 
@@ -345,14 +357,12 @@ def saturate_vector(
     Returns:
         list: [vx, vy] the saturated vector
     """
-    vx = 1 if vec[0] >= 0.5 else (-1 if vec[0] < -0.5 else 0)
-    vy = 1 if vec[1] >= 0.5 else (-1 if vec[1] < -0.5 else 0)
-    return [vx, vy]
+    return [int(np.round(vec[0])), int(np.round(vec[1]))]
 
 
 def check_neighbour_direction(
-    poly: np.array,
-    neighbour: np.array,    
+    poly,
+    neighbour,    
 ) -> PolygonDirection:
     """_summary_
     In case the polygon intercepts
@@ -365,7 +375,7 @@ def check_neighbour_direction(
         PolygonDirection: the direction in which the polygon intercepts
     """
     # check if the polygon and its neighbour intersect
-    if not bool_polygon_overlap_check(poly, neighbour):
+    if not check_neighbour_polygons(poly, neighbour):
         # if they don't, return no direction
         return None
     # if they do,
@@ -374,49 +384,52 @@ def check_neighbour_direction(
     center2 = find_centroid(neighbour)
     # from the center point of the polygons,
     # check the direction of the neighbour , in relation to the polygon
-    direction_vec = unit_vec(center1, center2)
+    direction_vec = unit_vector(center1, center2)
     # saturate the direction in North, South, East, West
-    direction = saturate_vector(direction_vec)
+    direction = tuple(saturate_vector(direction_vec))
     #return the direction
-    if direction == [0,1]:
+    if direction == PolygonDirection.NORTH.value:
         return PolygonDirection.NORTH
-    elif direction == [0,-1]:
+    elif direction == PolygonDirection.SOUTH.value:
         return PolygonDirection.SOUTH
-    elif direction == [1,0]:
+    elif direction == PolygonDirection.EAST.value:
         return PolygonDirection.EAST
-    elif direction == [-1,0]:
+    elif direction == PolygonDirection.WEST.value:
         return PolygonDirection.WEST
-    elif direction == [1,1]:
+    elif direction == PolygonDirection.NORTH_EAST.value:
         return PolygonDirection.NORTH_EAST
-    elif direction == [-1,1]:
+    elif direction == PolygonDirection.NORTH_WEST.value:
         return PolygonDirection.NORTH_WEST
-    elif direction == [1,-1]:
+    elif direction == PolygonDirection.SOUTH_EAST.value:
         return PolygonDirection.SOUTH_EAST
-    elif direction == [-1,-1]:
+    elif direction == PolygonDirection.SOUTH_WEST.value:
         return PolygonDirection.SOUTH_WEST
     else: 
         return None
 
 
 def get_direction_between_rects(
-    poly: np.array,
-    neighbour: np.array,    
+    poly,
+    neighbour,    
 ) -> PolygonDirection:
     """_summary_
-    Gets the direction between two rectangles!
+    Gets the direction between two rectangles, saturating this direction
+    in only 4 directions : North, South, East, West
+    # ! Deprecated
     Args:
         poly        (np.array): from rectangle
         neighbour   (np.array): to rectangle
     Returns:
         PolygonDirection: direction between the rectangles
     """
+    raise DeprecationWarning("get_direction_between_rects is deprecated")
     if len(poly) != 4 or len(neighbour) != 4:
         raise ValueError("rectangles must have 4 vertices only!")
     # get the 8-side direction between the two rectangles
     direction = check_neighbour_direction(poly, neighbour)
     # check which side (horizontal or vertical) is the bigger
-    verd = np.max([y for y in poly[:,1]]) - np.min([y for y in poly[:,1]])
-    hord = np.max([x for x in poly[:,0]]) - np.min([x for x in poly[:,0]])
+    verd = np.max( [y for y in poly[:,1]] ) - np.min( [y for y in poly[:,1]] )
+    hord = np.max( [x for x in poly[:,0]] ) - np.min( [x for x in poly[:,0]] )
     retDir = direction
     if verd > hord:
         # if the vertical side is bigger,
@@ -437,29 +450,106 @@ def get_direction_between_rects(
     return retDir
 
 
+def get_rectangle_length_width_ratio(
+    poly,
+    polyNeighbourDirection: PolygonDirection
+) -> tuple:
+    """_summary_
+    Gets the ratio of Length/Width of the rectangle
+    in relation of the direction of movement of a point
+    through the surface of the rectangle
+    Args:
+        poly (gdstk.Polygon) : 
+            Polygon to check the Length/Width ratio
+            
+        polyNeighbourDirection (PolygonDirection) : 
+            The direction of the flow of a point charge through the surface of the polygon
+    Returns:
+        tuple: Length/Width ratio
+    """
+    if len(poly.points) != 4:
+        raise ValueError("Polygon is not a rectangle")
+    chargeMovementVec = np.array(polyNeighbourDirection.value)
+    points = poly.points
+    firstEdge = (points[0], points[1])
+    vec1 = np.array([firstEdge[1][0] - firstEdge[0][0], firstEdge[1][1] - firstEdge[0][1]])
+    secondEdge = (points[1], points[2])
+    vec2 = np.array([secondEdge[1][0] - secondEdge[0][0], secondEdge[1][1] - secondEdge[0][1]])
+    # compute colinearity for the first and second edge, in relation to the charge
+    # movemenet vec
+    # get cross product
+    cpVec1ChargeMovementVec = np.cross(vec1, chargeMovementVec)
+    # get cross product vector euclidean norm to measure collinearity
+    collinearityVec1ChargeMovementVec = np.sqrt(cpVec1ChargeMovementVec.dot(cpVec1ChargeMovementVec))
+    cpVec2ChargeMovementVec = np.cross(vec2, chargeMovementVec)
+    collinearityVec2ChargeMovementVec = np.sqrt(cpVec2ChargeMovementVec.dot(cpVec2ChargeMovementVec))
+    if collinearityVec1ChargeMovementVec > collinearityVec2ChargeMovementVec:
+        #  secondEdge defines the length of the rectangle
+        return np.sqrt( vec2.dot(vec2) ) / np.sqrt( vec1.dot(vec1) )
+    else:
+        return np.sqrt( vec1.dot(vec1) ) / np.sqrt( vec2.dot(vec2) )
+        
+
 def fragment_polygon(
     poly: Polygon,
-    maxPoints = 199,
     precision = 1e-3,
-) -> Polygon:
+) -> list:
     """_summary_
-    #! Deprecated
-    Fragments the polygon into a Polygon object
+    Fragments the polygon into multiple rectangular polygons
     Args:
         poly        (Polygon)   : the polygon to fragment
         maxPoints   (int)       : the maximum number of points to keep
         precision   (float)     : the precision to use
     Returns:
         Polygon: the polygon set resulting from the fragmentation operation
+    NOTE: Optimal number of max points is 5, to obtain only rectangles in the
+    fragmented polygon 
     """
-    raise DeprecationWarning("This function is deprecated!")
-    #return poly.fracture(max_points = maxPoints, precision = precision)
-
-
+    maxPoints = 5 # empirical maximum number of points to fractue everything in rectangles
+    frags = poly.fracture(max_points = maxPoints, precision = precision)
+    #ey = [0,1,0]
+    ex = [1.0 , 0.0, 0.0]
+    slicedFrags = []
+    for p in frags:
+        edge1 = (p.points[0], p.points[1])
+        vector1 = np.array([edge1[1][0] - edge1[0][0], edge1[1][1] - edge1[0][1], 0])
+        lengthEdge1 = np.sqrt(vector1.dot(vector1))
+        edge2 = (p.points[1], p.points[2])
+        vector2 = np.array([edge2[1][0] - edge2[0][0], edge2[1][1] - edge2[0][1], 0])
+        lengthEdge2 = np.sqrt(vector2.dot(vector2))
+        # check the colinearity of each of the edges with unit abciss vector
+        cpVector1Ex = np.cross(ex,vector1)
+        colVector1Ex = np.sqrt(cpVector1Ex.dot(cpVector1Ex))
+        cpVector2Ex = np.cross(ex,vector2)
+        colVector2Ex = np.sqrt(cpVector2Ex.dot(cpVector2Ex))
+        slices = [p]
+        cutPos = None
+        if colVector1Ex > colVector2Ex:
+            # compute the slicing points for the polygon along the edge 2 orientation
+            if lengthEdge1 != 0.0 and lengthEdge2 > 1.0*lengthEdge1:
+                cutPos = list( np.sort( np.linspace(edge2[0][0], edge2[1][0], num = int(lengthEdge2/lengthEdge1)+1)[1:-1]) )
+                slices = slice( p, cutPos, "x",precision = precision)
+            elif lengthEdge2 != 0.0 and lengthEdge1 > 1.0*lengthEdge2:
+                cutPos = list( np.sort( np.linspace(edge1[0][1], edge1[1][1], num = int(lengthEdge1/lengthEdge2)+1)[1:-1] ) )
+                slices = slice( p, cutPos, "y",precision = precision)
+        else: # colVector1Ex <= colVector2Ex
+            if lengthEdge1 != 0.0 and lengthEdge2 > 1.0*lengthEdge1:
+                cutPos = list( np.sort( np.linspace(edge2[0][1], edge2[1][1], num = int(lengthEdge2/lengthEdge1)+1)[1:-1]) )
+                slices = slice( p, cutPos, "y",precision = precision)
+            elif lengthEdge2 != 0.0 and lengthEdge1 > 1.0*lengthEdge2:
+                cutPos = list( np.sort( np.linspace(edge1[0][0], edge1[1][0], num = int(lengthEdge1/lengthEdge2)+1)[1:-1]) )
+                slices = slice( p, cutPos, "x",precision = precision)
+        [[slicedFrags.append(sl) for sl in subslice] for subslice in slices]
+    return slicedFrags if len(slicedFrags) > 0 else None
+        
+    # determine the orientation of slicing
+    # after fracturing, perform slicing on each of the resulting polygons
+    # and finally retrieve the resulting sliced polygons
+@timer
 def fragment_net(
     name: str,
     cell: Cell,
-    maxPoints = 199,
+    table: GdsTable,
     precision = 1e-3,
 ) -> Cell:
     """_summary_
@@ -473,28 +563,45 @@ def fragment_net(
         precision   (float)     : precision of the cuts
     """
     # create a new gds cell, to which the fragments will be added
-    net = Cell(name, exclude_from_current = True)
-    for (poly, path, label, references) in cell:
-        net.add(fragment_polygon(poly, maxPoints, precision))
-        net.add(fragment_polygon(path, maxPoints, precision))
-        net.add(label)
-        net.add(references)
+    net = Cell(name)
+    metalLayers = table.getDrawingMetalLayersMap()
+    # filter metal layers, ignoring fragmentation of vias
+    metals = [val for key,val in metalLayers.items() if contains(key, "met") ]
+    for poly in itertools.chain(cell.get_polygons(), cell.get_paths()):
+        if (poly.layer, poly.datatype) in metals:
+            fragments = fragment_polygon(poly, precision = precision)
+            if fragments is not None:
+                [net.add(p) for p in fragments]
+        else:
+            net.add(poly)
     return net
 
 def get_polygons_by_spec(
     cell: Cell,
-    layer,
-    datatype,
+    filters: list
 ) -> list:
+    """_summary_
+    Returns a list of polygons of a cell
+    that features a layer and datatype tuple 
+    that corresponds to a tuple featured in the
+    filters list
+    Args:
+        cell    (Cell)  : GDS cell structure holding the polygons to be filtered
+        filters (list)  : List of (layer,datatype) tuples that filter the polygons of the cell
+    Returns:
+        list: list of Polygons resulting from the filtering operation
+    """
+    if not all( [ type(filter) == tuple for filter in filters] ) and not all( [ type(filter) == list for filter in filters] ) and not all( [ len(filter) == 2 for filter in filters] ):
+        raise TypeError("Each filter must be a list of tuples or lists of length 2!")
     polys = []
-    for poly in itertools.chain(cell.get_polygonsets(), cell.get_paths()):
-        if poly.layers[0] == layer and poly.datatypes[0] == datatype:
+    for poly in itertools.chain(cell.get_polygons(), cell.get_paths(), cell.get_labels()):
+        if (poly.layer, poly.datatype) in filters:
             polys.append(poly)
     return polys
 
 def get_polygon_dict(
     cell: Cell,
-    specs: list,
+    filters: list,
 ) -> dict:
     """_summary_
     Gets a dictionary of polygons by spec
@@ -505,16 +612,16 @@ def get_polygon_dict(
         dict: dictionary of {(layer,datatype): [polygons]}
     """
     ret = {}
-    if len(specs) == 0:
-        return ret
-    if type(specs[0]) != tuple or type(specs[0]) != list and len(specs[0]) != 2:
-        raise TypeError("The specifications must be a list of tuples or lists of length 2!")
-    for spec in specs:
-        layer = spec[0]
-        datatype = spec[1]
+    filterIsNotList = not all( [ type(filter) == list for filter in filters] )
+    filterIsNotTuple = not all( [ type(filter) == tuple for filter in filters] )
+    filterHasNot2Items = not all( [ len(filter) == 2 for filter in filters] )
+    if filterIsNotList and filterIsNotTuple and filterHasNot2Items:
+        raise TypeError("Each filter must be a list of tuples or lists of length 2!")
+    for filter in filters:
+        layer, datatype = filter
         if (layer, datatype) in ret.keys():
             raise ValueError("The specifications must be unique!")
-        ret[(layer, datatype)] = get_polygons_by_spec(cell, layer, datatype)
+        ret[(layer, datatype)] = get_polygons_by_spec(cell, [filter])
     return ret
       
 def check_polygon_in_cell(
@@ -531,11 +638,10 @@ def check_polygon_in_cell(
         bool: _description_
     """
     # check if the received polygons are valid
-    if type(polygon) != Polygon and type(polygon) != Polygon and type(polygon) != rectangle and type(polygon) != RobustPath:
-        raise TypeError("polyA must be a Polygon, Polygon, rectangle or RobustPath object!")
-    layer = polygon.layers[0]
-    datatype = polygon.datatypes[0]
-    for other in get_polygons_by_spec(cell, layer, datatype):
+    if type(polygon) != Polygon and type(polygon) != RobustPath:
+        raise TypeError("Polygon must be a Polygon or RobustPath object!")
+    filters = [(polygon.layer, polygon.datatype)]
+    for other in get_polygons_by_spec(cell, filters):
         if check_same_polygon(polygon, other):
             return True
     return False
@@ -561,27 +667,25 @@ def check_via_connection(
         # ! result will not mean anything
     """
     # check if the received polygons are valid
-    if type(polyA) != Polygon and type(polyA) != Polygon and type(polyA) != rectangle and type(polyA) != RobustPath:
-        raise TypeError("polyA must be a Polygon, Polygon, rectangle or RobustPath object!")
-    if type(polyB) != Polygon and type(polyB) != Polygon and type(polyB) != rectangle and type(polyB) != RobustPath:
-        raise TypeError("polyB must be a Polygon, Polygon, rectangle or RobustPath object!")
-    if type(via) != Polygon and type(via) != Polygon and type(via) != rectangle and type(via) != RobustPath:
-        raise TypeError("via must be a Polygon, Polygon, rectangle or RobustPath object!")
+    if type(polyA) != Polygon and type(polyA) != RobustPath:
+        raise TypeError("PolyA must be a Polygon or RobustPath object!")
+    if type(polyB) != Polygon and type(polyB) != RobustPath:
+        raise TypeError("PolyB must be a Polygon or RobustPath object!")
+    if type(via) != Polygon and type(via) != RobustPath:
+        raise TypeError("Via must be a Polygon or RobustPath object!")
     # check if the polygons are the same in pairs
     if check_same_polygon(polyA, polyB):
-        return False
+        raise ValueError("PolyA and PolyB must be different!")
     if check_same_polygon(polyA, via):
-        return False
+        raise ValueError("PolyA and Via must be different!")
     if check_same_polygon(polyB, via):
-        return False
-    
-    # check if the layers are not the same
-    if polyA.layers[0] == polyB.layers[0]:
-        return False
-    if polyA.layers[0] == via.layers[0]:
-        return False
-    if polyB.layers[0] == via.layers[0]:
-        return False
+        raise ValueError("PolyB and Via must be different!")
+    if polyA.layer == polyB.layer and polyA.datatype == polyB.datatype:
+        raise ValueError("PolyA and PolyB must be in different layers!")
+    if polyA.layer == via.layer and polyA.datatype == via.datatype:
+        raise ValueError("PolyA and Via must be in different layers!")
+    if polyB.layer == via.layer and polyB.datatype == via.datatype:
+        raise ValueError("PolyB and Via must be in different layers!")
     # finally , check for mutual overlap of vias by the two polygons
     return bool_polygon_overlap_check(polyA,via) and bool_polygon_overlap_check(polyB,via)
 
@@ -600,20 +704,17 @@ def join_overlapping_polygons_cell(
     Returns:
         Cell: the new gdspy.Cell object with the joined polygons
     """
-    newCell = Cell(cell.name+"_joined", exclude_from_current = True)
-    polygons = cell.get_polygons(by_spec = list(layerMap.values()))
+    newCell = Cell(cell.name+"_joined")
+    polygons = get_polygon_dict(cell, list(layerMap.values()))
     for layer, datatype in polygons.keys():
         poly = boolean( polygons[(layer, datatype)], polygons[(layer, datatype)], 'or', layer = layer, datatype = datatype )
-        poly = Polygon( poly ,layer = layer, datatype = datatype )
-        newCell.add(poly)
+        [newCell.add(p) for p in poly]
     return newCell
 
 
 def fuse_overlapping_cells(
     cellA: Cell,
-    cellB: Cell,
-    maxPoints: int = 199,
-    precision: float = 1e-3, 
+    cellB: Cell
 ) -> Cell:
     """_summary_
     Fuses both cells into a single cell if both cells
@@ -629,68 +730,111 @@ def fuse_overlapping_cells(
         None: If no polygon of any layer in common
     """
     # get the layers that are common to both cells
-    layersA = cellA.get_layers()
-    datatypesA = cellA.get_datatypes()
+    layersA = [poly.layer for poly in cellA.get_polygons()]
+    datatypesA = [poly.datatype for poly in cellA.get_polygons()]
     ldA = list(zip(layersA, datatypesA))
-    layersB = cellB.get_layers()
-    datatypesB = cellB.get_datatypes()
+    layersB = [poly.layer for poly in cellB.get_polygons()]
+    datatypesB = [poly.datatype for poly in cellB.get_polygons()]
     ldB = list(zip(layersB, datatypesB))
     commonLd = [ld for ld in ldA if ld in ldB] # get the common layer,datatype tuples to both cells
-    for layer,datatype in commonLd:
-        for polyA in get_polygons_by_spec(cellA, layer, datatype):
-            if check_polygon_in_cell(polyA, cellB):
-                # fuse the cells together and return it
-                fuseCell = cellA.copy(cellA.name)
-                [fuseCell.add(item) for item in cellB]
-                return fuseCell
+    for polyA in get_polygons_by_spec(cellA, commonLd):
+        if check_polygon_in_cell(polyA, cellB):
+            # fuse the cells together and return it
+            fuseCell = cellA.copy(cellA.name)
+            [fuseCell.add(item) for item in itertools.chain(cellB.get_polygons(), cellB.get_paths(), cellB.get_labels())]
+            [fuseCell.add(Reference(ref)) for ref in cellB.dependencies(False)]
+            return fuseCell
     return None
 
 def select_abstraction_depth(
     name: str,
-    lib : Library,
-    depth: int = 0,
-    select: dict = {}
-) -> Library:
+    cell: Cell,
+    depth: int = None,
+    filters: list = []
+) -> Cell:
     """_summary_
     Extracts the selected layers of the 
     cells of the library at a given 
     abstraction depth, and returns a new Library
     Args:
         name   (str)        : name of the returning library
-        lib    (Library) : Library object to be extracted from
+        cell   (cell)       : Cell object to extract from
         depth  (int)        : abstraction depth
-        select (dict)       : dictionary of selected (layer, datatype) tuples
+        select (dict)       : list of selected (layer, datatype) tuples
+    Returns:
+        Cell: the newly extracted cell from the depth parameters
+        None:  if no polygons/paths are parsed from a cell to another
+    NOTE : #! datatype keyword argument is not being supported in current gdstk.Cell.get_polygons function !! Report Problem
     """
+    
+    # check if the filters are valid
+    filterIsNotList = not all( [ type(filter) == list for filter in filters] )
+    filterIsNotTuple = not all( [ type(filter) == tuple for filter in filters] )
+    filterHasNot2Items = not all( [ len(filter) == 2 for filter in filters] )
+    if filterIsNotList and filterIsNotTuple and filterHasNot2Items:
+        raise TypeError("Each filter must be a list of tuples or lists of length 2!")
     # create a new library
-    newLib = Library(name)
-    for cell in lib:
-        # create a new cell
-        newCell = Cell(cell.name, exclude_from_current = True)
-        # add the polygons, paths, labels to the new cell
-        newCell.add(cell.get_polygons(depth = depth))
-        newCell.add(cell.get_polygonsets(depth = depth))
-        newCell.add(cell.get_paths(depth = depth))
-        newCell.add(cell.get_labels(depth = depth))
-        # don't add the references
-        # add the cell to the new library
-        newLib.add(newCell)
-    return newLib
+    newCell = Cell(name)
+    newCell.properties = copy(cell.properties)
+    if len(filters) > 0:
+        for poly in itertools.chain(
+            cell.get_polygons(depth = depth), 
+            cell.get_paths( depth = depth ), 
+            cell.get_labels(depth = depth )
+        ):
+            if (poly.layer, poly.datatype) in filters:
+                newCell.add(poly)
+    else: # copy all the items withou layer, datatype restriction, only applying depth restriction
+        for poly in itertools.chain(
+            cell.get_polygons(depth = depth), 
+            cell.get_paths(depth = depth), 
+            cell.get_labels(depth = depth)
+        ):
+            newCell.add(poly)
+    return newCell if len(newCell.polygons) > 0 else None
 
 def add_port(
-    port : SpeedsterPort,
     layout: Cell,
     table: GdsTable,
-) -> None:
+    name: str = "new_port",
+    typo: str = "input",
+    location: tuple = (0,0),
+    width: float = 1.0,
+    layer: str = "met1",
+    resistance = 0.0,
+) -> SpeedsterPort:
     """_summary_
-    Adds/Draws a port to the a layout cell
+    Adds/Draws a rectangular (square) port to the a layout cell
     Args:
-        port    (SpeedsterPort) : SpeedsterPort object
-        layout  (Cell)       : a gdspy Cell object containing the layout
+        port        (SpeedsterPort) : SpeedsterPort object
+        layout      (Cell)          : a gdspy Cell object containing the layout
                                     to which the port will be added
+        table       (GdsTable)      : GdsTable object containing the GDS Table information
+        name        (str)           : name of the port
+        type        (str)           : type of the port (input, output or inout)
+        location    (tuple)         : location of the port
+        width       (float)         : width of the port
+        layer       (str)           : name of the layer of the port
+        resistance  (float)         : resistance of the port
+    Returns:
+        SpeedsterPort: the newly created SpeedsterPort object
     """
-    layer, datatype = table.getGdsLayerDatatypeFromLayerNamePurpose(
+    port = SpeedsterPort(
+        name = name,
+        ioType = SpeedsterPortType(typo),
+        resistance = resistance,
+        location = location,
+        width = width,
+        layer = layer
+    )
+    l, dt = table.getGdsLayerDatatypeFromLayerNamePurpose(
         port.layer, 
         GdsLayerPurpose(port.purpose)
     )[0]
-    portPoly = Polygon(port.get_polygon(), layer, datatype)
+    portPoly = Polygon(port.get_polygon(), layer = l, datatype = dt)
+    portPoly.set_property("SpdstrPort", True)
+    portPoly.set_property("SpdstrPortName", port.name)
+    portPoly.set_property("SpdstrPortType", port.ioType.value)
+    portPoly.set_property("SpdstrPortResistance", port.resistance)
     layout.add(portPoly)
+    return port

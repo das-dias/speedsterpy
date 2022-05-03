@@ -1,4 +1,4 @@
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __name__ = "spdstrutil"
 __description__ = "Speedster utilities package."
 __date__ = "2022-04-19"

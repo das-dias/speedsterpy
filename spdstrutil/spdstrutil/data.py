@@ -252,8 +252,8 @@ class GdsTable(dict):
         layerMap = {}
         # don't use the first layer, since it is a via layer
         #layerMap["mcon"] = getGdsLayerDatatypeFromLayerNamePurpose("mcon", GdsLayerPurpose.DRAWING)
-        layerMap["met1"] = self.getGdsLayerDatatypeFromLayerNamePurpose("met1", GdsLayerPurpose.DRAWING)
-        layerMap["via"] = self.getGdsLayerDatatypeFromLayerNamePurpose( "via", GdsLayerPurpose.DRAWING)
+        layerMap["met1"] = self.getGdsLayerDatatypeFromLayerNamePurpose("met1", GdsLayerPurpose.DRAWING)[0]
+        layerMap["via"] = self.getGdsLayerDatatypeFromLayerNamePurpose( "via", GdsLayerPurpose.DRAWING)[0]
         for i in range(2,maxMetalNum):#maximum number of metal layers 
             aux = self.getGdsLayerDatatypeFromLayerNamePurpose("{}{}".format(met,str(i)), GdsLayerPurpose.DRAWING)
             if aux != None:
