@@ -14,7 +14,7 @@ from spdstrlib import (
 )
 
 def test_version():
-    assert __version__ == '0.1.0'
+    assert __version__ == '0.1.34'
 
 def test_workspace_lib_creation():
     lib = SpdstrWorkspaceLib(

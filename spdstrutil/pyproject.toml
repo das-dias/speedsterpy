@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "spdstrutil"
-version = "0.1.1"
-description = ""
+version = "0.1.2"
+description = "Speedster application utilities package."
 authors = ["dasdias <das.dias6@gmail.com>"]
+license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
 python = "^3.9"

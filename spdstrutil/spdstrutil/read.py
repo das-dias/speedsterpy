@@ -27,11 +27,11 @@ def readGdsTable(filePath = "") -> GdsTable:
     
     path = os.path.abspath(filePath)
     if not os.path.exists(path):
-        raise ValueError("Invalid file path provided : {}".format(path))
+        raise ValueError(f"Invalid file path provided : {path}")
     
     head, tail = os.path.split(path)
     filename, extension = os.path.splitext(tail)
-    if extension != ".csv" and extension != ".yaml":
+    if extension not in [".csv", ".yaml"]:
         raise ValueError("Invalid format provided: accepts \"json\" or \"csv\"")
     
     # declare a new empty gds table

@@ -31,38 +31,23 @@ def handleResistanceExtraction(argv : Namespace) -> None:
     Args:
         argv (Namespace): _description_
     """
-    ptp = False
-    vis = False
-    out = False
-    bench = False
     workspaceName = ""
-    netlistName = ""
-    spefName = ""
-    
     # store true arguments
-    if argv.ptp:
-        ptp = True
-    if argv.v :
-        vis = True
-    if argv.o:
-        out = True
-    if argv.b:
-        bench = True
+    ptp = bool(argv.ptp)
+    vis = bool(argv.v)
+    out = bool(argv.o)
+    bench = bool(argv.b)
     
     # string arguments
     if not argv.ws:
         raise ValueError("Workspace name is required.")
     workspaceName = argv.ws[0]
-    
-    if argv.net:
-        netlistName = argv.net[0]
-        
-    if argv.spef:
-        spefName = argv.spef[0]
-    
+    netlistName = argv.net[0] if argv.net else ""
+    spefName = argv.spef[0] if argv.spef else ""
     libPath = os.path.join(__workspace_lib_path__, __workspace_filename__)
     # load workspace library
     lib = load(libPath)
+    raise NotImplementedError("Not implemented yet.")
     # from workspace library, load workspace
     workspaceJsonPath = lib[workspaceName]["fullpath"]
     workspace = read(workspaceJsonPath)

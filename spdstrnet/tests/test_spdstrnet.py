@@ -504,7 +504,7 @@ class TestGeometry(unittest.TestCase):
             location = (14.5,1.1),
             width = 0.25,
             layer = "met1",
-            resistance = 1e-3,
+            resistance = 1e-3
         )
         l, dt = gdsTable.getGdsLayerDatatypeFromLayerNamePurpose(
                     port.layer, 

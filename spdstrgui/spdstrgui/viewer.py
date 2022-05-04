@@ -252,12 +252,9 @@ class BackannotationDict(dict):
     def __missing__(self, key) -> str:
         if self.cmap is None:
             raise ValueError("No colour map has been set for the BackannotationDict")
-        
-        if self.default is None: # if no default value is set, generate it from the colour map
-            # key holds the physical quantity value
-            rgb = self.cmap.getHextCode(key)
-        else:
-            rgb = self.default
+        # if no default value is set, generate it from the colour map
+        # key holds the physical quantity value
+        rgb = self.cmap.getHexCode(key) if self.default is None else self.default
         self[key] = rgb
         return rgb
 

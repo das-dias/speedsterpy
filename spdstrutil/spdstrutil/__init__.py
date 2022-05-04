@@ -1,4 +1,4 @@
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 __name__ = "spdstrutil"
 __description__ = "Speedster utilities package."
 __date__ = "2022-04-19"
@@ -19,6 +19,6 @@ from .write import (
 from .util import *
 
 def verboseInfo():
-    print("Version      : {} ({})".format(__version__, __date__))
-    print("Authors      : {}".format(__author__))
-    print("Description  : {}".format(__description__))
+    print(f"Version      : {__version__} ({__date__})")
+    print(f"Authors      : {__author__}")
+    print(f"Description  : {__description__}")

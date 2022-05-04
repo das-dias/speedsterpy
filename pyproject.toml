@@ -17,9 +17,9 @@ toml = "^0.10.2"
 #native libs
 deflefpy = "^0.1.3"
 #local
-spdstrlib   = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrlib"}
-spdstrres   = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrres"}
-spdstrutil  = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrutil"}
+
+spdstrres = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrres"}
+
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2" # unit testing framework for python

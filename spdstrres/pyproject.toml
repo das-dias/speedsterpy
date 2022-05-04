@@ -3,6 +3,7 @@ name = "spdstrres"
 version = "0.1.2"
 description = "Speedster point-to-point resistance extraction tool."
 authors = ["dasdias <das.dias6@gmail.com>"]
+license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
 # global
@@ -13,8 +14,9 @@ networkx = "^2.7.1" # graph library for python
 gdspy = "^1.6.11" # gdsii ic layout information visualization and parsing" 
 PyYAML = "^6.0"
 #local
-spdstrlib = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrlib"}
-spdstrutil = {path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrutil"}
+spdstrutil = "^0.1.2"
+spdstrlib = "^0.1.34"
+
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

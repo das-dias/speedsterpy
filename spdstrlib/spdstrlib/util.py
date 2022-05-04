@@ -16,7 +16,7 @@ def getParent(path, levels = 1):
         levels  (int)   : number of levels to go up in the tree
     """
     common = path
-    for i in range(levels+1):
+    for _ in range(levels+1):
         common = os.path.dirname(os.path.abspath(common))
     return common
 
@@ -47,8 +47,10 @@ def handleMutuallyExclusive(argv: Namespace) -> list:
                                 argparse subparser
     """
     ret = []
-    if (argv.s or argv.d or argv.l) and \
-        ( argv.c or argv.tab or argv.tlef or argv.lef or argv.gds or argv.tb or argv.o or argv.net):
+    if (
+        (argv.s or argv.d or argv.l) and 
+        ( argv.c or argv.tab or argv.tlef or argv.lef or argv.gds or argv.tb or argv.o or argv.net)
+    ): 
         raise ValueError("Show, List and Delete operations are mutually exclusive with other operations")
     if argv.c:
         ret.append(SelectedOp.CREATE)
@@ -72,33 +74,29 @@ def handleCreation(argv: Namespace, lib: SpdstrWorkspaceLib) -> None:
     # mandatory values to be parsed from console
     if not argv.c:
         raise ValueError("No workspace name provided")
+    
     workspaceName = argv.c[0]
     if not argv.ws:
         raise ValueError("No workspace directory was provided")
+    
     workspaceDir = argv.ws[0]
     if not argv.tlef:
         raise ValueError("No .tlef tech rule file was provided")
+    
     techFilePath = argv.tlef[0]
     if not argv.gds:
         raise ValueError("No .gds layout file was provided")
+    
     layoutFilePath = argv.gds[0]
     if not argv.lef:
         raise ValueError("No .lef ports and pins file was provided")
-    lefFilePath = argv.lef[0]
     
+    lefFilePath = argv.lef[0]
     #optional values to be parsed from console
-    netlistFilePath = None
-    testbenchDir    = None
-    outputDir       = None
-    tableFilePath   = None
-    if argv.net:
-        netlistFilePath = argv.nl[0]
-    if argv.tb:
-        testbenchDir = argv.tb[0]
-    if argv.o:
-        outputDir = argv.o[0]
-    if argv.tab:
-        tableFilePath = argv.tab[0]
+    netlistFilePath = argv.nl[0] if argv.net else None
+    testbenchDir = argv.tb[0] if argv.tb else None
+    outputDir = argv.o[0] if argv.o else None
+    tableFilePath = argv.tab[0] if argv.tab else None
         
     # after collecting all the values, create the workspace
     args = {
@@ -111,7 +109,6 @@ def handleCreation(argv: Namespace, lib: SpdstrWorkspaceLib) -> None:
     newWorkspace = SpdstrWorkspace(selfDict=args)
     if netlistFilePath:
         newWorkspace.saveNetlistFile(netlistFilePath)
-        
     if testbenchDir:
         newWorkspace.saveTestbenchDir(testbenchDir)
     else:
@@ -122,10 +119,8 @@ def handleCreation(argv: Namespace, lib: SpdstrWorkspaceLib) -> None:
         newWorkspace.saveTestbenchOutput(outputDir)
     else: # if no output directory was provided,
         newWorkspace.createTestbenchOutputDir() # create a default testbench output directory
-    
     if tableFilePath:
         newWorkspace.saveGdsTableFile(tableFilePath)
-    
     # write new workspace to memory
     write(newWorkspace)
     # save new workspace to library
@@ -150,7 +145,7 @@ def handleDeletion(argv: Namespace, lib: SpdstrWorkspaceLib) -> SpdstrWorkspace:
     # erase the workspace from the library
     lib.remove(workspaceName)
     #return the deleted workspace
-    logger.info("Workspace \"{}\" deleted successfully".format(workspaceName))
+    logger.info(f"Workspace \"{workspaceName}\" deleted successfully")
     return workspace
 
 def handleShow(argv: Namespace, lib : SpdstrWorkspaceLib) -> None:
@@ -168,7 +163,7 @@ def handleShow(argv: Namespace, lib : SpdstrWorkspaceLib) -> None:
     #fetch the workspace from the library
     workspace = read(lib[workspaceName]["fullpath"])
     #print the workspace
-    logger.info("\n{}".format(str(workspace)))
+    logger.info(f"\n{workspace}")
 
 def handleList(argv: Namespace, lib: SpdstrWorkspaceLib) -> None:
     """_summary_
@@ -180,4 +175,4 @@ def handleList(argv: Namespace, lib: SpdstrWorkspaceLib) -> None:
                                 from console, using
                                 argparse subparser
     """
-    logger.info("\n{}".format(str(lib)))
+    logger.info(f"\n{str(lib)}")

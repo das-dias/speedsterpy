@@ -53,7 +53,7 @@ SYSFUNCS = {
 
 def main():
     sysPath = sys.argv[0]
-    logger.info("Speedster$ Parent Dir : {}".format(sysPath))
+    logger.info(f"Speedster$ Parent Dir : {sysPath}")
     #logger.info("Dir: {}".format(os.path.abspath(__file__))) 
     parser = setupArgParser(SYSTOKENS, SYSARGS, SYSFUNCS)
     if len(sys.argv) <= 1: # append "help" if no arguments are given

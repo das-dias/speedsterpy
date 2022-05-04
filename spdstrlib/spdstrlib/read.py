@@ -17,11 +17,13 @@ def load(libPath = "") -> SpdstrWorkspaceLib:
         head, tail = os.path.split(libPath)
         name, extension = os.path.splitext(tail)
         if extension != ".bin":
-            raise ValueError("The workspace library path \"{}\" is not a .bin file".format(libPath))
+            raise ValueError(f"The workspace library path \"{libPath}\" is not a .bin file")
+        
         filepath = libPath
     #logger.info("Loading workspace library...")
     if not os.path.exists(filepath):
-        raise FileNotFoundError("The workspace library \"{}\" does not exist".format(filepath))
+        raise FileNotFoundError(f"The workspace library \"{filepath}\" does not exist")
+    
     with open(filepath, "rb") as f:
         lib = pickle.load(f)
     dirpath, filename = os.path.split(filepath)
@@ -41,7 +43,7 @@ def read(workspacePath) -> SpdstrWorkspace:
     logger.info("Reading workspace from \"{}\"".format(path))
     workspace = None # returning object
     if not os.path.exists(workspacePath):
-        raise FileNotFoundError("The workspace path \"{}\" does not exist".format(path))
+        raise FileNotFoundError(f"The workspace path \"{path}\" does not exist")
     
     workspaceDict = {} # dictionary to save the read info
     try:
@@ -49,16 +51,17 @@ def read(workspacePath) -> SpdstrWorkspace:
             try:
                 workspaceDict = json.load(f)
             except json.decoder.JSONDecodeError as e:
-                raise json.decoder.JSONDecodeError("The workspace \"{}\" is not a valid JSON file".format(path))
+                raise json.decoder.JSONDecodeError(f"The workspace \"{path}\" is not a valid JSON file")
+            
     except FileNotFoundError:
-        raise FileNotFoundError("The workspace path \"{}\" does not exist".format(path))
+        raise FileNotFoundError(f"The workspace path \"{path}\" does not exist")
     
     if workspaceDict == {}:
-        raise ValueError("The workspace \"{}\" is empty".format(path))
+        raise ValueError(f"The workspace \"{path}\" is empty")
     try:
         workspace = SpdstrWorkspace(selfDict = workspaceDict)
     except Exception as e:
         raise e
     
-    logger.info("Success reading workspace from \"{}\"".format(path))
+    logger.info(f"Success reading workspace from \"{path}\"")
     return workspace

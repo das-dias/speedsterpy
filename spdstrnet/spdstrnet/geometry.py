@@ -99,7 +99,7 @@ def check_polygon_overlap(
     polyList = boolean(
         polygonA, 
         polygonB,
-        'and', 
+        'and',
         layer = layer, 
         datatype = datatype, 
         precision = precision
@@ -167,10 +167,8 @@ def get_common_edges(
         # todo : Not perfect! Polygons sharing a single vertix are still considered as cheighbours
         if inside([e2[0]], bbox)[0]:
             return (e2[0], e1[1])
-        
         if inside([e2[1]], bbox)[0]:
             return (e1[0], e2[1])
-        
         return None
         
     for edgeA in zip(pointsA, pointsA[1:]):
@@ -215,7 +213,7 @@ def bool_polygon_overlap_check(
         bool:   returns wether the two polygons overlap or not
                 True: They overlap; False: They don't overlap
     """
-    return not ( check_polygon_overlap(polygonA, polygonB) is None )
+    return check_polygon_overlap(polygonA, polygonB) is not None
 
 def check_neighbour_polygons(
     polyA,
@@ -230,9 +228,12 @@ def check_neighbour_polygons(
         bool:   returns wether the two polygons have common edges
                 True: They have common edges; False: They don't have common edges
     """
-    if polyA.layer == polyB.layer and polyA.datatype == polyB.datatype:
-        if get_common_edges(polyA,polyB) is not None:
-            return True if not bool_polygon_overlap_check(polyA,polyB) else False
+    if (
+        polyA.layer == polyB.layer and
+        polyA.datatype == polyB.datatype and
+        get_common_edges(polyA,polyB) is not None
+    ):
+        return not bool_polygon_overlap_check(polyA,polyB)
     return False
 
 def check_same_polygon(
@@ -330,7 +331,6 @@ def find_centroid(
     cent[1] = cent[1]/ (6.0*signedArea)
     return tuple(cent)
 
-
 def unit_vector(
     pointA: list,
     pointB: list,
@@ -345,8 +345,6 @@ def unit_vector(
     vec = np.array([pointB[0] - pointA[0], pointB[1] - pointA[1]])
     return [ vec[0]/np.sqrt(vec.dot(vec)), vec[1]/np.sqrt(vec.dot(vec)) ]
 
-
-
 def saturate_vector(
     vec: list
 ) -> list:
@@ -358,7 +356,6 @@ def saturate_vector(
         list: [vx, vy] the saturated vector
     """
     return [int(np.round(vec[0])), int(np.round(vec[1]))]
-
 
 def check_neighbour_direction(
     poly,
@@ -591,13 +588,13 @@ def get_polygons_by_spec(
     Returns:
         list: list of Polygons resulting from the filtering operation
     """
-    if not all( [ type(filter) == tuple for filter in filters] ) and not all( [ type(filter) == list for filter in filters] ) and not all( [ len(filter) == 2 for filter in filters] ):
+    if (
+        not all( [ type(filter) == tuple for filter in filters] ) and
+        not all( [ type(filter) == list for filter in filters] ) and
+        not all( [ len(filter) == 2 for filter in filters] )
+    ):
         raise TypeError("Each filter must be a list of tuples or lists of length 2!")
-    polys = []
-    for poly in itertools.chain(cell.get_polygons(), cell.get_paths(), cell.get_labels()):
-        if (poly.layer, poly.datatype) in filters:
-            polys.append(poly)
-    return polys
+    return [poly for poly in itertools.chain(cell.get_polygons(), cell.get_paths(), cell.get_labels()) if (poly.layer, poly.datatype) in filters]
 
 def get_polygon_dict(
     cell: Cell,
@@ -612,17 +609,17 @@ def get_polygon_dict(
         dict: dictionary of {(layer,datatype): [polygons]}
     """
     ret = {}
-    filterIsNotList = not all( [ type(filter) == list for filter in filters] )
-    filterIsNotTuple = not all( [ type(filter) == tuple for filter in filters] )
-    filterHasNot2Items = not all( [ len(filter) == 2 for filter in filters] )
-    if filterIsNotList and filterIsNotTuple and filterHasNot2Items:
+    if(
+        not all( [ type(filter) == list for filter in filters] ) and
+        not all( [ type(filter) == tuple for filter in filters] ) and
+        not all( [ len(filter) == 2 for filter in filters] )
+    ):
         raise TypeError("Each filter must be a list of tuples or lists of length 2!")
-    for filter in filters:
-        layer, datatype = filter
-        if (layer, datatype) in ret.keys():
-            raise ValueError("The specifications must be unique!")
-        ret[(layer, datatype)] = get_polygons_by_spec(cell, [filter])
-    return ret
+    # test for duplicates
+    if len([filter for filter in filters if filters.count(filter) > 1]) > 0:
+        raise ValueError("Each filter must be unique!")
+    
+    return {(layer, datatype): get_polygons_by_spec(cell, [(layer, datatype)]) for layer,datatype in filters}
       
 def check_polygon_in_cell(
     polygon,
@@ -641,10 +638,7 @@ def check_polygon_in_cell(
     if type(polygon) != Polygon and type(polygon) != RobustPath:
         raise TypeError("Polygon must be a Polygon or RobustPath object!")
     filters = [(polygon.layer, polygon.datatype)]
-    for other in get_polygons_by_spec(cell, filters):
-        if check_same_polygon(polygon, other):
-            return True
-    return False
+    return any(check_same_polygon(polygon, other) for other in get_polygons_by_spec(cell, filters))
 
 def check_via_connection(
     polyA,
@@ -667,11 +661,11 @@ def check_via_connection(
         # ! result will not mean anything
     """
     # check if the received polygons are valid
-    if type(polyA) != Polygon and type(polyA) != RobustPath:
+    if type(polyA) not in [Polygon, RobustPath]:
         raise TypeError("PolyA must be a Polygon or RobustPath object!")
-    if type(polyB) != Polygon and type(polyB) != RobustPath:
+    if type(polyB) not in [Polygon, RobustPath]:
         raise TypeError("PolyB must be a Polygon or RobustPath object!")
-    if type(via) != Polygon and type(via) != RobustPath:
+    if type(via) not in [Polygon, RobustPath]:
         raise TypeError("Via must be a Polygon or RobustPath object!")
     # check if the polygons are the same in pairs
     if check_same_polygon(polyA, polyB):
@@ -689,7 +683,6 @@ def check_via_connection(
     # finally , check for mutual overlap of vias by the two polygons
     return bool_polygon_overlap_check(polyA,via) and bool_polygon_overlap_check(polyB,via)
 
-
 def join_overlapping_polygons_cell(
     cell: Cell,
     layerMap: dict,
@@ -704,13 +697,12 @@ def join_overlapping_polygons_cell(
     Returns:
         Cell: the new gdspy.Cell object with the joined polygons
     """
-    newCell = Cell(cell.name+"_joined")
+    newCell = Cell(f"{cell.name}_joined")
     polygons = get_polygon_dict(cell, list(layerMap.values()))
     for layer, datatype in polygons.keys():
         poly = boolean( polygons[(layer, datatype)], polygons[(layer, datatype)], 'or', layer = layer, datatype = datatype )
         [newCell.add(p) for p in poly]
     return newCell
-
 
 def fuse_overlapping_cells(
     cellA: Cell,
@@ -768,29 +760,19 @@ def select_abstraction_depth(
     """
     
     # check if the filters are valid
-    filterIsNotList = not all( [ type(filter) == list for filter in filters] )
-    filterIsNotTuple = not all( [ type(filter) == tuple for filter in filters] )
-    filterHasNot2Items = not all( [ len(filter) == 2 for filter in filters] )
-    if filterIsNotList and filterIsNotTuple and filterHasNot2Items:
+    if(
+        not all( [ type(filter) == list for filter in filters] ) and
+        not all( [ type(filter) == tuple for filter in filters] ) and
+        not all( [ len(filter) == 2 for filter in filters] )
+    ):
         raise TypeError("Each filter must be a list of tuples or lists of length 2!")
     # create a new library
     newCell = Cell(name)
     newCell.properties = copy(cell.properties)
     if len(filters) > 0:
-        for poly in itertools.chain(
-            cell.get_polygons(depth = depth), 
-            cell.get_paths( depth = depth ), 
-            cell.get_labels(depth = depth )
-        ):
-            if (poly.layer, poly.datatype) in filters:
-                newCell.add(poly)
+        [newCell.add(poly) for poly in itertools.chain(cell.get_polygons(depth = depth),cell.get_paths(depth = depth),cell.get_labels(depth = depth)) if (poly.layer, poly.datatype) in filters]
     else: # copy all the items withou layer, datatype restriction, only applying depth restriction
-        for poly in itertools.chain(
-            cell.get_polygons(depth = depth), 
-            cell.get_paths(depth = depth), 
-            cell.get_labels(depth = depth)
-        ):
-            newCell.add(poly)
+        [newCell.add(poly) for poly in itertools.chain(cell.get_polygons(depth = depth),cell.get_paths(depth = depth),cell.get_labels(depth = depth))]
     return newCell if len(newCell.polygons) > 0 else None
 
 def add_port(

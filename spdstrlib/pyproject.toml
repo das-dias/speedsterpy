@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "spdstrlib"
-version = "0.1.33"
-description = "Speedster project library manager."
-authors = ["das-dias <das.dias6@gmail.com>"]
+version = "0.1.34"
+description = "Speedster application project library manager."
+authors = ["Diogo André <das.dias6@gmail.com>"]
+license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
 python = "^3.9"

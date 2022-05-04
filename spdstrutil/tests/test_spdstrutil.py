@@ -12,7 +12,7 @@ from spdstrutil import (
 
 class TestUtil(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(__version__, '0.1.0')
+        self.assertEqual(__version__, '0.1.2')
 
     def test_gds_table_read(self):
         path = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/resources/sky130/skywater-pdk-libs-sky130_fd_pr/skywater130/gds_layers.csv"

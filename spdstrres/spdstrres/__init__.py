@@ -17,9 +17,9 @@ from .write import *
 from .util import *
 
 def verboseInfo():
-    print("Version      : {} ({})".format(__version__, __date__))
-    print("Authors      : {}".format(__author__))
-    print("Description  : {}".format(__description__))
+    print(f"Version      : {__version__} ({__date__})")
+    print(f"Authors      : {__author__}")
+    print(f"Description  : {__description__}")
 
 def run(subparser, *args, **kwargs) -> None:
     logger.info("Speedster$\nResistance PEX : {}".format(__file__))

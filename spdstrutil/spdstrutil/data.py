@@ -20,7 +20,7 @@ class Unimplemented(object):
         object (Unimplemented): raise unimplementation error
     """
     def __init__(self, filepath):
-        raise TypeError ("{} : Module not implemented yet".format(filepath))
+        raise TypeError (f"{filepath} : Module not implemented yet")
     
 
 class GdsLayerPurpose(Enum):
@@ -73,14 +73,7 @@ class GdsTable(dict):
         """_summary_
         Return the GDSTable data structure as a dict
         """
-        ret = {}
-        for key, value in self.table.items():
-            ret[key] = {
-                "name": value["name"],
-                "purpose": [pur.name for pur in value["purpose"]],
-                "description": value["description"]
-            }
-        return ret
+        return {key: {"name": value["name"], "purpose": [pur.name for pur in value["purpose"]], "description": value["description"]} for key, value in self.table.items()}
 
     def __str__(self) -> str:
         """_summary_
@@ -153,11 +146,11 @@ class GdsTable(dict):
                              data structure
         """
         for key, value in yamlDict.items():
-            if not "name" in value.keys():
+            if "name" not in value.keys():
                 raise TypeError("The parsed yamlDict must contain the \"name\" key")
-            if not "purpose" in value.keys():
+            if "purpose" not in value.keys():
                 raise TypeError("The parsed yamlDict must contain the \"purpose\" key")
-            if not "description" in value.keys():
+            if "description" not in value.keys():
                 raise TypeError("The parsed yamlDict must contain the \"description\" key")
             self.add(
                 key[0],
@@ -230,11 +223,8 @@ class GdsTable(dict):
         Returns:
             list[tuple]: list of layer,datatype tuples for each layer
         """
-        ret:list = []
-        for key, value in self.items():
-            if layerName == value["name"] and purpose in value["purpose"]:
-                ret.append(key)
-        return ret if len(ret) > 0 else None
+        ret = [key for key,value in self.items() if layerName == value["name"] and purpose in value["purpose"]]
+        return ret or None
     
     def getDrawingMetalLayersMap(self, maxMetalNum = 15) -> dict:
         """_summary_
@@ -255,16 +245,13 @@ class GdsTable(dict):
         layerMap["met1"] = self.getGdsLayerDatatypeFromLayerNamePurpose("met1", GdsLayerPurpose.DRAWING)[0]
         layerMap["via"] = self.getGdsLayerDatatypeFromLayerNamePurpose( "via", GdsLayerPurpose.DRAWING)[0]
         for i in range(2,maxMetalNum):#maximum number of metal layers 
-            aux = self.getGdsLayerDatatypeFromLayerNamePurpose("{}{}".format(met,str(i)), GdsLayerPurpose.DRAWING)
-            if aux != None:
-                layerMap["{}{}".format(met,str(i))] = aux[0]
-                lastVia = i
-            else: # if the routing metal layer is not found, stop
-                break
-            aux = self.getGdsLayerDatatypeFromLayerNamePurpose("{}{}".format(via,str(i)), GdsLayerPurpose.DRAWING)
-            if aux != None:
-                layerMap["{}{}".format(via,str(i))] = aux[0]
-                lastMetal = i
+            aux = self.getGdsLayerDatatypeFromLayerNamePurpose(f"{met}{str(i)}", GdsLayerPurpose.DRAWING) # routing metal
+            if aux is None:
+                break# if the routing metal layer is not found, stop
+            layerMap[f"{met}{str(i)}"] = aux[0]
+            aux = self.getGdsLayerDatatypeFromLayerNamePurpose(f"{via}{str(i)}", GdsLayerPurpose.DRAWING) # via metal 
+            if aux is not None:
+                layerMap[f"{via}{str(i)}"] = aux[0]
         return layerMap
     
     def addBackannotation(self):
@@ -292,8 +279,7 @@ class GdsTable(dict):
             for key in forbiddenLayerDatatypes[name]:
                 if (key[0], key[1]+1) not in forbiddenLayerDatatypes[name]:
                     possibleLayerDatatypes[name] = (key[0], key[1]+1)
-        for name, key in possibleLayerDatatypes.items():
-            self.add(key[0], key[1], name, [GdsLayerPurpose.BACKANNOTATION.name], "{} backannotation".format(name))
+        [self.add(key[0], key[1], name, [GdsLayerPurpose.BACKANNOTATION.name], f"{name} backannotation") for name,key in possibleLayerDatatypes.items()]
         return self
 
     def addHighlight(self):

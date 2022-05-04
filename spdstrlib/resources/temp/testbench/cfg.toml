@@ -1,5 +1,5 @@
 [speedster.testbench]
 workspace = "test_project"
 description = "Testbench configuration file for extraction"
-testbench = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/speedsterpy/spdstrlib/resources/temp/testbench"
-output = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/speedsterpy/spdstrlib/resources/temp/testbench/output"
+testbench = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrlib/resources/temp/testbench"
+output = "/Users/dasdias/Documents/SoftwareProjects/speedsterpy/spdstrlib/resources/temp/testbench/output"
