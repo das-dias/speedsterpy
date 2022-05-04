@@ -51,8 +51,9 @@ def wait_ms(msec: float) -> str:
     time.sleep(msec*1e-3)
     return f"Waited {msec} milli seconds"
 print(wait_ms(10))
------------------------------------------
+```
 Console Output:
+```
 .........2022-05-03 23:58:12.201 | INFO     | spdstrutil.util:wrapper:30 - Function: wait_ms	Runtime: 12568.000 μs.
 Waited 10.0 milli seconds
 ```
